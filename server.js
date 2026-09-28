@@ -3,11 +3,11 @@ const app = express();
 app.use(express.json());
 
 // =====================
-// AYARLAR - senin çalışan kodunun aynısı
+// AYARLAR (GÜNCEL)
 // =====================
 const PORT = process.env.PORT || 3000;
 const ACCOUNT_ID = 'b4c0063d5774f085266860ba3ca18043';
-const API_TOKEN  = 'cfut_solnD6nrAMOhwHICkzgniKW6GlKflvmDOHC1gj3F90c17659';
+const API_TOKEN  = 'cfat_ZAV8LoU4luj6J9RfzoKSFkFMMnfVV1uY4FhBZ4BYc068bb33';
 const MODEL      = '@cf/moonshotai/kimi-k2.7-code';
 
 const API_URL = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/run/${MODEL}`;
@@ -371,8 +371,8 @@ const HTML = `<!DOCTYPE html>
   const overlay = document.getElementById('overlay');
   const statusEl = document.getElementById('status');
   const themeBtn = document.getElementById('themeBtn');
-  const STORAGE_KEY = 'bdai_chats_v8';
-  const THEME_KEY = 'bdai_theme_v8';
+  const STORAGE_KEY = 'bdai_chats_v9';
+  const THEME_KEY = 'bdai_theme_v9';
   let chats = [], currentId = null, isStreaming = false;
   function loadChats() {
     try { chats = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch { chats = []; }
@@ -617,7 +617,7 @@ app.get('/test', async (req, res) => {
   }
 });
 
-// Sohbet - SENİN ÇALIŞAN KODUNUN AYNISI
+// Sohbet
 app.post('/chat', async (req, res) => {
   try {
     const { history } = req.body;
@@ -639,12 +639,10 @@ app.post('/chat', async (req, res) => {
     const result = await response.json();
     console.log('[BD AI] CF yanıtı:', response.status, JSON.stringify(result).slice(0, 400));
 
-    // Senin kodunda sonuç result.result.response içinde geliyor
     if (result && result.result && result.result.response) {
       return res.json({ reply: result.result.response });
     }
 
-    // Hata varsa göster
     const errMsg = result?.errors?.[0]?.message
                 || result?.error?.message
                 || result?.error
