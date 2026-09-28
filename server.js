@@ -10,8 +10,9 @@ const CF_ACCOUNT_ID = 'b4c0063d5774f085266860ba3ca18043';
 const CF_API_TOKEN  = 'cfut_solnD6nrAMOhwHICkzgniKW6GlKflvmDOHC1gj3F90c17659';
 const MODEL = '@cf/meta/llama-3.1-8b-instruct';
 
-// Native Workers AI uç noktası
-const API_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/run/${MODEL}`;
+// İki farklı endpoint: önce native, olmazsa OpenAI-uyumlu
+const NATIVE_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/run/${MODEL}`;
+const OPENAI_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/v1/chat/completions`;
 
 // =====================
 // FRONTEND
@@ -112,7 +113,7 @@ const HTML = `<!DOCTYPE html>
     cursor: pointer; display: flex; align-items: center; justify-content: center;
     gap: 8px; transition: all .3s; box-shadow: var(--shadow-accent);
   }
-  .new-chat:hover { background-position: 100% 0; transform: translateY(-2px); box-shadow: 0 12px 40px var(--accent-glow); }
+  .new-chat:hover { transform: translateY(-2px); box-shadow: 0 12px 40px var(--accent-glow); }
   .history-label { padding: 12px 22px 8px; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700; }
   .chat-list { flex: 1; overflow-y: auto; padding: 0 10px 12px; }
   .chat-item {
@@ -375,8 +376,8 @@ const HTML = `<!DOCTYPE html>
   const overlay = document.getElementById('overlay');
   const statusEl = document.getElementById('status');
   const themeBtn = document.getElementById('themeBtn');
-  const STORAGE_KEY = 'bdai_chats_v6';
-  const THEME_KEY = 'bdai_theme_v6';
+  const STORAGE_KEY = 'bdai_chats_v7';
+  const THEME_KEY = 'bdai_theme_v7';
   let chats = [], currentId = null, isStreaming = false;
   function loadChats() {
     try { chats = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch { chats = []; }
@@ -599,27 +600,83 @@ const HTML = `<!DOCTYPE html>
 </html>`;
 
 // =====================
+// YARDIMCI FONKSİYONLAR
+// =====================
+
+// Mesaj geçmişini system rolü olmadan hazırla
+function buildMessages(history) {
+  const sys = 'Sen BD AI adlı yardımcı bir Türkçe AI asistanısın. Net, doğru ve kısa cevap ver. Markdown kullanabilirsin.';
+  const msgs = history.map(m => ({ role: m.role, content: m.content }));
+  if (msgs.length > 0 && msgs[0].role === 'user') {
+    msgs[0] = { role: 'user', content: sys + '\n\n' + msgs[0].content };
+  } else {
+    msgs.unshift({ role: 'user', content: sys });
+  }
+  return msgs;
+}
+
+// Yanıttan metni çıkar
+function extractReply(data) {
+  if (!data) return null;
+  return data?.result?.response
+      || data?.result?.choices?.[0]?.message?.content
+      || data?.choices?.[0]?.message?.content
+      || data?.response
+      || data?.result
+      || null;
+}
+
+// Native endpoint'e istek at
+async function tryNative(messages) {
+  const r = await fetch(NATIVE_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + CF_API_TOKEN,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ messages, stream: false })
+  });
+  const raw = await r.text();
+  let data;
+  try { data = JSON.parse(raw); } catch { data = { raw }; }
+  return { ok: r.ok, status: r.status, data, raw };
+}
+
+// OpenAI-uyumlu endpoint'e istek at
+async function tryOpenAI(messages) {
+  const r = await fetch(OPENAI_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + CF_API_TOKEN,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ model: MODEL, messages, stream: false })
+  });
+  const raw = await r.text();
+  let data;
+  try { data = JSON.parse(raw); } catch { data = { raw }; }
+  return { ok: r.ok, status: r.status, data, raw };
+}
+
+// =====================
 // ROTALAR
 // =====================
 app.get('/', (req, res) => res.send(HTML));
 app.get('/health', (req, res) => res.send('OK'));
 
-// Token'ı test etmek için: tarayıcıdan /test aç
+// Token testi - her iki endpoint'i de dener
 app.get('/test', async (req, res) => {
+  const messages = [{ role: 'user', content: 'Merhaba, kısaca cevap ver.' }];
+  const out = {};
   try {
-    const r = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + CF_API_TOKEN,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ messages: [{ role: 'user', content: 'Merhaba' }] })
-    });
-    const text = await r.text();
-    res.status(r.status).send(text);
-  } catch (e) {
-    res.status(500).send(String(e));
-  }
+    const n = await tryNative(messages);
+    out.native = { status: n.status, body: n.raw.slice(0, 800) };
+  } catch (e) { out.native = { error: String(e) }; }
+  try {
+    const o = await tryOpenAI(messages);
+    out.openai = { status: o.status, body: o.raw.slice(0, 800) };
+  } catch (e) { out.openai = { error: String(e) }; }
+  res.json(out);
 });
 
 app.post('/chat', async (req, res) => {
@@ -627,43 +684,46 @@ app.post('/chat', async (req, res) => {
     const { history } = req.body;
     if (!Array.isArray(history)) return res.status(400).json({ error: 'Geçersiz istek' });
 
-    const messages = [
-      { role: 'system', content: 'Sen BD AI adlı yardımcı bir Türkçe AI asistanısın. Net, doğru ve kısa cevap ver. Markdown kullanabilirsin.' },
-      ...history
-    ];
+    const messages = buildMessages(history);
 
-    console.log('[BD AI] İstek gönderiliyor, mesaj sayısı:', messages.length);
-
-    const aiRes = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + CF_API_TOKEN,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ messages })
-    });
-
-    const raw = await aiRes.text();
-    console.log('[BD AI] CF yanıtı:', aiRes.status, raw.slice(0, 500));
-
-    let data;
-    try { data = JSON.parse(raw); } catch { data = { raw }; }
-
-    if (!aiRes.ok || data.success === false) {
-      const errMsg = data?.errors?.[0]?.message
-                  || data?.error?.message
-                  || data?.error
-                  || data?.messages?.[0]
-                  || ('HTTP ' + aiRes.status);
-      console.error('[BD AI] Hata:', aiRes.status, errMsg);
-      return res.status(aiRes.status === 200 ? 500 : aiRes.status).json({ error: errMsg });
+    // 1. Native endpoint'i dene
+    let result;
+    try {
+      result = await tryNative(messages);
+      console.log('[BD AI] Native yanıt:', result.status, result.raw.slice(0, 300));
+    } catch (e) {
+      console.error('[BD AI] Native fetch hatası:', e.message);
+      result = null;
     }
 
-    const reply = data?.result?.response
-               || data?.result?.choices?.[0]?.message?.content
-               || data?.choices?.[0]?.message?.content
-               || data?.response
-               || '(boş cevap)';
+    let reply = result && result.ok ? extractReply(result.data) : null;
+
+    // 2. Native başarısızsa OpenAI-uyumlu endpoint'i dene
+    if (!reply) {
+      console.log('[BD AI] Native başarısız, OpenAI-uyumlu deneniyor...');
+      try {
+        const o = await tryOpenAI(messages);
+        console.log('[BD AI] OpenAI yanıt:', o.status, o.raw.slice(0, 300));
+        if (o.ok) {
+          reply = extractReply(o.data);
+          result = o;
+        } else {
+          result = o;
+        }
+      } catch (e) {
+        console.error('[BD AI] OpenAI fetch hatası:', e.message);
+      }
+    }
+
+    if (!reply) {
+      const errMsg = result?.data?.errors?.[0]?.message
+                  || result?.data?.error?.message
+                  || result?.data?.error
+                  || result?.raw?.slice(0, 200)
+                  || 'Bilinmeyen hata';
+      console.error('[BD AI] Başarısız:', errMsg);
+      return res.status(result?.status || 500).json({ error: errMsg });
+    }
 
     res.json({ reply });
   } catch (err) {
@@ -675,5 +735,6 @@ app.post('/chat', async (req, res) => {
 app.listen(PORT, () => {
   console.log('BD AI sunucusu ' + PORT + ' portunda çalışıyor');
   console.log('Model: ' + MODEL);
-  console.log('Endpoint: ' + API_URL);
-});
+  console.log('Native: ' + NATIVE_URL);
+  console.log('OpenAI: ' + OPENAI_URL);
+});!
