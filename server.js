@@ -3,16 +3,14 @@ const app = express();
 app.use(express.json());
 
 // =====================
-// SABİT AYARLAR
+// AYARLAR - senin çalışan kodunun aynısı
 // =====================
 const PORT = process.env.PORT || 3000;
-const CF_ACCOUNT_ID = 'b4c0063d5774f085266860ba3ca18043';
-const CF_API_TOKEN  = 'cfut_solnD6nrAMOhwHICkzgniKW6GlKflvmDOHC1gj3F90c17659';
-const MODEL = '@cf/meta/llama-3.1-8b-instruct';
+const ACCOUNT_ID = 'b4c0063d5774f085266860ba3ca18043';
+const API_TOKEN  = 'cfut_solnD6nrAMOhwHICkzgniKW6GlKflvmDOHC1gj3F90c17659';
+const MODEL      = '@cf/moonshotai/kimi-k2.7-code';
 
-// İki farklı endpoint: önce native, olmazsa OpenAI-uyumlu
-const NATIVE_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/run/${MODEL}`;
-const OPENAI_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/v1/chat/completions`;
+const API_URL = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/run/${MODEL}`;
 
 // =====================
 // FRONTEND
@@ -71,10 +69,8 @@ const HTML = `<!DOCTYPE html>
   html, body {
     height: 100%;
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    -webkit-font-smoothing: antialiased;
-    overflow: hidden;
+    background: var(--bg); color: var(--text);
+    -webkit-font-smoothing: antialiased; overflow: hidden;
   }
   .bg-blobs { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
   .blob { position: absolute; border-radius: 50%; filter: blur(100px); opacity: 0.55; animation: float 20s ease-in-out infinite; }
@@ -101,14 +97,13 @@ const HTML = `<!DOCTYPE html>
     width: 40px; height: 40px; border-radius: 12px;
     background: var(--grad-2); display: grid; place-items: center;
     font-weight: 800; font-size: 14px; color: #fff;
-    letter-spacing: -0.5px; box-shadow: var(--shadow-accent); position: relative;
+    letter-spacing: -0.5px; box-shadow: var(--shadow-accent);
   }
   .brand { font-weight: 700; font-size: 16px; letter-spacing: -0.02em; }
   .brand small { display: block; font-size: 11px; color: var(--muted); font-weight: 500; margin-top: 1px; }
   .new-chat {
     margin: 16px 14px 12px; padding: 13px 16px;
-    background: var(--grad-1); background-size: 200% 200%;
-    color: #fff; border: none; border-radius: 14px;
+    background: var(--grad-1); color: #fff; border: none; border-radius: 14px;
     font-family: inherit; font-weight: 700; font-size: 14px;
     cursor: pointer; display: flex; align-items: center; justify-content: center;
     gap: 8px; transition: all .3s; box-shadow: var(--shadow-accent);
@@ -138,7 +133,7 @@ const HTML = `<!DOCTYPE html>
     color: var(--text-dim); cursor: pointer; font-size: 16px;
     display: grid; place-items: center; transition: all .2s;
   }
-  .icon-btn:hover { background: var(--surface-hover); color: var(--text); border-color: var(--border-strong); }
+  .icon-btn:hover { background: var(--surface-hover); color: var(--text); }
   .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   .topbar {
     padding: 14px 22px; display: flex; align-items: center; gap: 14px;
@@ -351,7 +346,7 @@ const HTML = `<!DOCTYPE html>
       </button>
       <div class="model-badge">
         <span class="dot"></span>
-        <span>Llama 3.1 8B</span>
+        <span>Kimi K2.7</span>
       </div>
       <div class="status-txt" id="status">Hazır</div>
     </div>
@@ -376,8 +371,8 @@ const HTML = `<!DOCTYPE html>
   const overlay = document.getElementById('overlay');
   const statusEl = document.getElementById('status');
   const themeBtn = document.getElementById('themeBtn');
-  const STORAGE_KEY = 'bdai_chats_v7';
-  const THEME_KEY = 'bdai_theme_v7';
+  const STORAGE_KEY = 'bdai_chats_v8';
+  const THEME_KEY = 'bdai_theme_v8';
   let chats = [], currentId = null, isStreaming = false;
   function loadChats() {
     try { chats = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch { chats = []; }
@@ -600,132 +595,63 @@ const HTML = `<!DOCTYPE html>
 </html>`;
 
 // =====================
-// YARDIMCI FONKSİYONLAR
-// =====================
-
-// Mesaj geçmişini system rolü olmadan hazırla
-function buildMessages(history) {
-  const sys = 'Sen BD AI adlı yardımcı bir Türkçe AI asistanısın. Net, doğru ve kısa cevap ver. Markdown kullanabilirsin.';
-  const msgs = history.map(m => ({ role: m.role, content: m.content }));
-  if (msgs.length > 0 && msgs[0].role === 'user') {
-    msgs[0] = { role: 'user', content: sys + '\n\n' + msgs[0].content };
-  } else {
-    msgs.unshift({ role: 'user', content: sys });
-  }
-  return msgs;
-}
-
-// Yanıttan metni çıkar
-function extractReply(data) {
-  if (!data) return null;
-  return data?.result?.response
-      || data?.result?.choices?.[0]?.message?.content
-      || data?.choices?.[0]?.message?.content
-      || data?.response
-      || data?.result
-      || null;
-}
-
-// Native endpoint'e istek at
-async function tryNative(messages) {
-  const r = await fetch(NATIVE_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + CF_API_TOKEN,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ messages, stream: false })
-  });
-  const raw = await r.text();
-  let data;
-  try { data = JSON.parse(raw); } catch { data = { raw }; }
-  return { ok: r.ok, status: r.status, data, raw };
-}
-
-// OpenAI-uyumlu endpoint'e istek at
-async function tryOpenAI(messages) {
-  const r = await fetch(OPENAI_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + CF_API_TOKEN,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ model: MODEL, messages, stream: false })
-  });
-  const raw = await r.text();
-  let data;
-  try { data = JSON.parse(raw); } catch { data = { raw }; }
-  return { ok: r.ok, status: r.status, data, raw };
-}
-
-// =====================
 // ROTALAR
 // =====================
 app.get('/', (req, res) => res.send(HTML));
 app.get('/health', (req, res) => res.send('OK'));
 
-// Token testi - her iki endpoint'i de dener
+// Test
 app.get('/test', async (req, res) => {
-  const messages = [{ role: 'user', content: 'Merhaba, kısaca cevap ver.' }];
-  const out = {};
   try {
-    const n = await tryNative(messages);
-    out.native = { status: n.status, body: n.raw.slice(0, 800) };
-  } catch (e) { out.native = { error: String(e) }; }
-  try {
-    const o = await tryOpenAI(messages);
-    out.openai = { status: o.status, body: o.raw.slice(0, 800) };
-  } catch (e) { out.openai = { error: String(e) }; }
-  res.json(out);
+    const r = await fetch(API_URL, {
+      headers: { Authorization: 'Bearer ' + API_TOKEN },
+      method: 'POST',
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: 'Merhaba' }]
+      })
+    });
+    const text = await r.text();
+    res.status(r.status).send(text);
+  } catch (e) {
+    res.status(500).send(String(e));
+  }
 });
 
+// Sohbet - SENİN ÇALIŞAN KODUNUN AYNISI
 app.post('/chat', async (req, res) => {
   try {
     const { history } = req.body;
     if (!Array.isArray(history)) return res.status(400).json({ error: 'Geçersiz istek' });
 
-    const messages = buildMessages(history);
+    const messages = [
+      { role: 'system', content: 'Sen BD AI adlı yardımcı bir Türkçe AI asistanısın. Net, doğru ve kısa cevap ver. Markdown kullanabilirsin.' },
+      ...history
+    ];
 
-    // 1. Native endpoint'i dene
-    let result;
-    try {
-      result = await tryNative(messages);
-      console.log('[BD AI] Native yanıt:', result.status, result.raw.slice(0, 300));
-    } catch (e) {
-      console.error('[BD AI] Native fetch hatası:', e.message);
-      result = null;
+    console.log('[BD AI] İstek → mesaj sayısı:', messages.length);
+
+    const response = await fetch(API_URL, {
+      headers: { Authorization: 'Bearer ' + API_TOKEN },
+      method: 'POST',
+      body: JSON.stringify({ messages })
+    });
+
+    const result = await response.json();
+    console.log('[BD AI] CF yanıtı:', response.status, JSON.stringify(result).slice(0, 400));
+
+    // Senin kodunda sonuç result.result.response içinde geliyor
+    if (result && result.result && result.result.response) {
+      return res.json({ reply: result.result.response });
     }
 
-    let reply = result && result.ok ? extractReply(result.data) : null;
+    // Hata varsa göster
+    const errMsg = result?.errors?.[0]?.message
+                || result?.error?.message
+                || result?.error
+                || JSON.stringify(result).slice(0, 300);
 
-    // 2. Native başarısızsa OpenAI-uyumlu endpoint'i dene
-    if (!reply) {
-      console.log('[BD AI] Native başarısız, OpenAI-uyumlu deneniyor...');
-      try {
-        const o = await tryOpenAI(messages);
-        console.log('[BD AI] OpenAI yanıt:', o.status, o.raw.slice(0, 300));
-        if (o.ok) {
-          reply = extractReply(o.data);
-          result = o;
-        } else {
-          result = o;
-        }
-      } catch (e) {
-        console.error('[BD AI] OpenAI fetch hatası:', e.message);
-      }
-    }
-
-    if (!reply) {
-      const errMsg = result?.data?.errors?.[0]?.message
-                  || result?.data?.error?.message
-                  || result?.data?.error
-                  || result?.raw?.slice(0, 200)
-                  || 'Bilinmeyen hata';
-      console.error('[BD AI] Başarısız:', errMsg);
-      return res.status(result?.status || 500).json({ error: errMsg });
-    }
-
-    res.json({ reply });
+    console.error('[BD AI] Hata:', errMsg);
+    res.status(response.status === 200 ? 500 : response.status).json({ error: errMsg });
   } catch (err) {
     console.error('[BD AI] Sunucu hatası:', err);
     res.status(500).json({ error: err.message });
@@ -735,6 +661,5 @@ app.post('/chat', async (req, res) => {
 app.listen(PORT, () => {
   console.log('BD AI sunucusu ' + PORT + ' portunda çalışıyor');
   console.log('Model: ' + MODEL);
-  console.log('Native: ' + NATIVE_URL);
-  console.log('OpenAI: ' + OPENAI_URL);
-});!
+  console.log('Endpoint: ' + API_URL);
+});
