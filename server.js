@@ -3,14 +3,15 @@ const app = express();
 app.use(express.json());
 
 // =====================
-// AYARLAR (GÜNCEL)
+// AYARLAR
 // =====================
 const PORT = process.env.PORT || 3000;
 const ACCOUNT_ID = 'b4c0063d5774f085266860ba3ca18043';
-const API_TOKEN  = 'cfat_ZAV8LoU4luj6J9RfzoKSFkFMMnfVV1uY4FhBZ4BYc068bb33';
+const API_TOKEN  = 'cfut_qjr9t4MB2gEGmOY83AyHnOAZvLacImBr3TLHp59uaf85edc8';
 const MODEL      = '@cf/moonshotai/kimi-k2.7-code';
 
-const API_URL = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/run/${MODEL}`;
+const NATIVE_URL = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/run/${MODEL}`;
+const OPENAI_URL = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/v1/chat/completions`;
 
 // =====================
 // FRONTEND
@@ -371,8 +372,8 @@ const HTML = `<!DOCTYPE html>
   const overlay = document.getElementById('overlay');
   const statusEl = document.getElementById('status');
   const themeBtn = document.getElementById('themeBtn');
-  const STORAGE_KEY = 'bdai_chats_v9';
-  const THEME_KEY = 'bdai_theme_v9';
+  const STORAGE_KEY = 'bdai_chats_v10';
+  const THEME_KEY = 'bdai_theme_v10';
   let chats = [], currentId = null, isStreaming = false;
   function loadChats() {
     try { chats = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch { chats = []; }
@@ -597,27 +598,28 @@ const HTML = `<!DOCTYPE html>
 // =====================
 // ROTALAR
 // =====================
+
+// Ham token testi - her şeyi gösterir
+app.get('/test', async (req, res) => {
+  const out = { token_prefix: API_TOKEN.slice(0, 10), account: ACCOUNT_ID, model: MODEL };
+  try {
+    const r1 = await fetch(NATIVE_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + API_TOKEN,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'Merhaba' }] })
+    });
+    out.native = { status: r1.status, body: (await r1.text()).slice(0, 600) };
+  } catch (e) { out.native = { error: String(e) }; }
+  res.json(out);
+});
+
 app.get('/', (req, res) => res.send(HTML));
 app.get('/health', (req, res) => res.send('OK'));
 
-// Test
-app.get('/test', async (req, res) => {
-  try {
-    const r = await fetch(API_URL, {
-      headers: { Authorization: 'Bearer ' + API_TOKEN },
-      method: 'POST',
-      body: JSON.stringify({
-        messages: [{ role: 'user', content: 'Merhaba' }]
-      })
-    });
-    const text = await r.text();
-    res.status(r.status).send(text);
-  } catch (e) {
-    res.status(500).send(String(e));
-  }
-});
-
-// Sohbet
+// Sohbet - native dene, olmazsa OpenAI-uyumlu
 app.post('/chat', async (req, res) => {
   try {
     const { history } = req.body;
@@ -628,28 +630,63 @@ app.post('/chat', async (req, res) => {
       ...history
     ];
 
-    console.log('[BD AI] İstek → mesaj sayısı:', messages.length);
-
-    const response = await fetch(API_URL, {
-      headers: { Authorization: 'Bearer ' + API_TOKEN },
-      method: 'POST',
-      body: JSON.stringify({ messages })
-    });
-
-    const result = await response.json();
-    console.log('[BD AI] CF yanıtı:', response.status, JSON.stringify(result).slice(0, 400));
-
-    if (result && result.result && result.result.response) {
-      return res.json({ reply: result.result.response });
+    // 1. NATIVE endpoint
+    console.log('[BD AI] Native istek deneniyor...');
+    let response, result;
+    try {
+      response = await fetch(NATIVE_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + API_TOKEN,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ messages })
+      });
+      result = await response.json();
+      console.log('[BD AI] Native yanıt:', response.status, JSON.stringify(result).slice(0, 300));
+    } catch (e) {
+      console.log('[BD AI] Native fetch hatası:', e.message);
     }
 
+    // Native başarılıysa cevabı dön
+    if (response && response.ok) {
+      const reply = result?.result?.response
+                 || result?.result?.choices?.[0]?.message?.content
+                 || result?.choices?.[0]?.message?.content
+                 || result?.response;
+      if (reply) return res.json({ reply });
+    }
+
+    // 2. Fallback: OpenAI-uyumlu endpoint
+    console.log('[BD AI] OpenAI-uyumlu endpoint deneniyor...');
+    try {
+      const o = await fetch(OPENAI_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + API_TOKEN,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ model: MODEL, messages })
+      });
+      const od = await o.json();
+      console.log('[BD AI] OpenAI yanıt:', o.status, JSON.stringify(od).slice(0, 300));
+      if (o.ok) {
+        const reply = od?.choices?.[0]?.message?.content
+                   || od?.result?.response
+                   || od?.result?.choices?.[0]?.message?.content;
+        if (reply) return res.json({ reply });
+      }
+    } catch (e) {
+      console.log('[BD AI] OpenAI fetch hatası:', e.message);
+    }
+
+    // İkisi de başarısız
     const errMsg = result?.errors?.[0]?.message
                 || result?.error?.message
                 || result?.error
-                || JSON.stringify(result).slice(0, 300);
-
-    console.error('[BD AI] Hata:', errMsg);
-    res.status(response.status === 200 ? 500 : response.status).json({ error: errMsg });
+                || 'İki endpoint de başarısız oldu';
+    console.error('[BD AI] Kesin hata:', errMsg);
+    res.status(500).json({ error: errMsg });
   } catch (err) {
     console.error('[BD AI] Sunucu hatası:', err);
     res.status(500).json({ error: err.message });
@@ -659,5 +696,5 @@ app.post('/chat', async (req, res) => {
 app.listen(PORT, () => {
   console.log('BD AI sunucusu ' + PORT + ' portunda çalışıyor');
   console.log('Model: ' + MODEL);
-  console.log('Endpoint: ' + API_URL);
+  console.log('Native: ' + NATIVE_URL);
 });
