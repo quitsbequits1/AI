@@ -8,7 +8,8 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const ACCOUNT_ID = 'b4c0063d5774f085266860ba3ca18043';
 const API_TOKEN  = 'cfut_qjr9t4MB2gEGmOY83AyHnOAZvLacImBr3TLHp59uaf85edc8';
-const MODEL      = '@cf/moonshotai/kimi-k2.7-code';
+// Ücretsiz planda kesin çalışan model:
+const MODEL      = '@cf/meta/llama-3.1-8b-instruct';
 
 const NATIVE_URL = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/run/${MODEL}`;
 const OPENAI_URL = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/ai/v1/chat/completions`;
@@ -347,7 +348,7 @@ const HTML = `<!DOCTYPE html>
       </button>
       <div class="model-badge">
         <span class="dot"></span>
-        <span>Kimi K2.7</span>
+        <span>Llama 3.1 8B</span>
       </div>
       <div class="status-txt" id="status">Hazır</div>
     </div>
@@ -372,8 +373,8 @@ const HTML = `<!DOCTYPE html>
   const overlay = document.getElementById('overlay');
   const statusEl = document.getElementById('status');
   const themeBtn = document.getElementById('themeBtn');
-  const STORAGE_KEY = 'bdai_chats_v10';
-  const THEME_KEY = 'bdai_theme_v10';
+  const STORAGE_KEY = 'bdai_chats_v11';
+  const THEME_KEY = 'bdai_theme_v11';
   let chats = [], currentId = null, isStreaming = false;
   function loadChats() {
     try { chats = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch { chats = []; }
@@ -599,9 +600,9 @@ const HTML = `<!DOCTYPE html>
 // ROTALAR
 // =====================
 
-// Ham token testi - her şeyi gösterir
+// Test endpoint'i - token ve modelin çalışıp çalışmadığını gösterir
 app.get('/test', async (req, res) => {
-  const out = { token_prefix: API_TOKEN.slice(0, 10), account: ACCOUNT_ID, model: MODEL };
+  const out = { model: MODEL, account: ACCOUNT_ID, token_prefix: API_TOKEN.slice(0, 10) };
   try {
     const r1 = await fetch(NATIVE_URL, {
       method: 'POST',
@@ -619,7 +620,7 @@ app.get('/test', async (req, res) => {
 app.get('/', (req, res) => res.send(HTML));
 app.get('/health', (req, res) => res.send('OK'));
 
-// Sohbet - native dene, olmazsa OpenAI-uyumlu
+// Sohbet endpoint'i
 app.post('/chat', async (req, res) => {
   try {
     const { history } = req.body;
@@ -630,7 +631,7 @@ app.post('/chat', async (req, res) => {
       ...history
     ];
 
-    // 1. NATIVE endpoint
+    // 1. Native endpoint'i dene
     console.log('[BD AI] Native istek deneniyor...');
     let response, result;
     try {
