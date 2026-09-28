@@ -8,12 +8,13 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const CF_ACCOUNT_ID = 'a527a42bf997aeb40db051421d471a57';
 const CF_API_TOKEN  = 'cfut_Cd2jXKpKT4HRYPFT0JwcLIW3GNr22ISMoHiDi4i142329ca8';
-const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+// Ücretsiz planda çalışan model:
+const MODEL = '@cf/meta/llama-3.1-8b-instruct';
 
 const API_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/v1/chat/completions`;
 
 // =====================
-// FRONTEND
+// FRONTEND (arayüz aynı, sadece model adı güncellendi)
 // =====================
 const HTML = `<!DOCTYPE html>
 <html lang="tr">
@@ -27,7 +28,6 @@ const HTML = `<!DOCTYPE html>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
     --bg: #08080d;
     --bg-soft: #0d0d15;
@@ -54,7 +54,6 @@ const HTML = `<!DOCTYPE html>
     --shadow-lg: 0 20px 60px rgba(0,0,0,0.5);
     --shadow-accent: 0 8px 32px rgba(139, 92, 246, 0.35);
   }
-
   [data-theme="light"] {
     --bg: #f5f5fa;
     --bg-soft: #ffffff;
@@ -72,7 +71,6 @@ const HTML = `<!DOCTYPE html>
     --shadow-lg: 0 20px 60px rgba(0,0,0,0.1);
     --shadow-accent: 0 8px 32px rgba(139, 92, 246, 0.22);
   }
-
   html, body {
     height: 100%;
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
@@ -81,8 +79,6 @@ const HTML = `<!DOCTYPE html>
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
   }
-
-  /* Ambient gradient blobs */
   .bg-blobs {
     position: fixed;
     inset: 0;
@@ -116,21 +112,17 @@ const HTML = `<!DOCTYPE html>
     opacity: 0.35;
   }
   [data-theme="light"] .blob { opacity: 0.35; }
-
   @keyframes float {
     0%, 100% { transform: translate(0, 0) scale(1); }
     33% { transform: translate(50px, -50px) scale(1.1); }
     66% { transform: translate(-50px, 50px) scale(0.9); }
   }
-
   .app {
     display: flex;
     height: 100vh;
     position: relative;
     z-index: 1;
   }
-
-  /* ============ SIDEBAR ============ */
   .sidebar {
     width: 290px;
     background: var(--sidebar);
@@ -143,7 +135,6 @@ const HTML = `<!DOCTYPE html>
     flex-shrink: 0;
   }
   .sidebar.collapsed { margin-left: -290px; }
-
   .sidebar-header {
     padding: 20px;
     display: flex;
@@ -188,7 +179,6 @@ const HTML = `<!DOCTYPE html>
     font-weight: 500;
     margin-top: 1px;
   }
-
   .new-chat {
     margin: 16px 14px 12px;
     padding: 13px 16px;
@@ -225,7 +215,6 @@ const HTML = `<!DOCTYPE html>
     box-shadow: 0 12px 40px var(--accent-glow);
   }
   .new-chat:active { transform: translateY(0) scale(.98); }
-
   .history-label {
     padding: 12px 22px 8px;
     font-size: 10px;
@@ -234,7 +223,6 @@ const HTML = `<!DOCTYPE html>
     letter-spacing: 0.12em;
     font-weight: 700;
   }
-
   .chat-list {
     flex: 1;
     overflow-y: auto;
@@ -243,7 +231,6 @@ const HTML = `<!DOCTYPE html>
   .chat-list::-webkit-scrollbar { width: 4px; }
   .chat-list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
   .chat-list::-webkit-scrollbar-track { background: transparent; }
-
   .chat-item {
     padding: 11px 14px;
     border-radius: 11px;
@@ -290,7 +277,6 @@ const HTML = `<!DOCTYPE html>
   }
   .chat-item:hover .del { opacity: 1; }
   .chat-item .del:hover { color: var(--danger); background: rgba(239, 68, 68, 0.15); }
-
   .sidebar-footer {
     padding: 12px 14px;
     border-top: 1px solid var(--border);
@@ -316,8 +302,6 @@ const HTML = `<!DOCTYPE html>
     border-color: var(--border-strong);
     transform: translateY(-1px);
   }
-
-  /* ============ MAIN ============ */
   .main {
     flex: 1;
     display: flex;
@@ -325,7 +309,6 @@ const HTML = `<!DOCTYPE html>
     min-width: 0;
     position: relative;
   }
-
   .topbar {
     padding: 14px 22px;
     display: flex;
@@ -336,7 +319,6 @@ const HTML = `<!DOCTYPE html>
     -webkit-backdrop-filter: blur(24px);
     border-bottom: 1px solid var(--border);
   }
-
   .menu-btn {
     background: none;
     border: none;
@@ -350,7 +332,6 @@ const HTML = `<!DOCTYPE html>
   }
   .menu-btn:hover { background: var(--surface-hover); color: var(--text); }
   .menu-btn svg { width: 20px; height: 20px; }
-
   .model-badge {
     display: flex;
     align-items: center;
@@ -376,7 +357,6 @@ const HTML = `<!DOCTYPE html>
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.5; transform: scale(0.9); }
   }
-
   .status-txt {
     margin-left: auto;
     font-size: 12px;
@@ -395,8 +375,6 @@ const HTML = `<!DOCTYPE html>
   }
   .status-txt.busy::before { background: var(--accent-2); animation: pulse 1s infinite; }
   .status-txt.error::before { background: var(--danger); }
-
-  /* ============ CHAT AREA ============ */
   .chat {
     flex: 1;
     overflow-y: auto;
@@ -406,7 +384,6 @@ const HTML = `<!DOCTYPE html>
   .chat::-webkit-scrollbar { width: 8px; }
   .chat::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
   .chat::-webkit-scrollbar-track { background: transparent; }
-
   .msg-wrap {
     max-width: 860px;
     margin: 0 auto 30px;
@@ -419,7 +396,6 @@ const HTML = `<!DOCTYPE html>
     to { opacity: 1; transform: translateY(0); }
   }
   .msg-wrap.user { flex-direction: row-reverse; }
-
   .avatar {
     width: 36px; height: 36px;
     border-radius: 11px;
@@ -454,7 +430,6 @@ const HTML = `<!DOCTYPE html>
     opacity: 0.15;
   }
   [data-theme="light"] .avatar.ai-av { color: var(--accent); }
-
   .bubble {
     padding: 15px 19px;
     border-radius: 18px;
@@ -480,8 +455,6 @@ const HTML = `<!DOCTYPE html>
     border-top-left-radius: 5px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.15);
   }
-
-  /* Markdown */
   .bubble p { margin-bottom: 10px; }
   .bubble p:last-child { margin-bottom: 0; }
   .bubble h1, .bubble h2, .bubble h3 {
@@ -542,7 +515,6 @@ const HTML = `<!DOCTYPE html>
     font-weight: 400;
   }
   [data-theme="light"] .bubble pre code { color: #16161f; }
-
   .msg-actions {
     display: flex;
     gap: 4px;
@@ -572,7 +544,6 @@ const HTML = `<!DOCTYPE html>
     border-color: var(--border-strong);
     transform: translateY(-1px);
   }
-
   .typing-dots {
     display: flex;
     gap: 6px;
@@ -590,8 +561,6 @@ const HTML = `<!DOCTYPE html>
     0%, 60%, 100% { transform: translateY(0) scale(1); opacity: .5; }
     30% { transform: translateY(-8px) scale(1.1); opacity: 1; }
   }
-
-  /* ============ WELCOME ============ */
   .welcome {
     max-width: 740px;
     margin: auto;
@@ -635,7 +604,6 @@ const HTML = `<!DOCTYPE html>
     50% { background-position: 100% 50%; }
   }
   .welcome p { color: var(--text-dim); font-size: 16px; margin-bottom: 36px; font-weight: 500; }
-
   .suggestions {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -681,8 +649,6 @@ const HTML = `<!DOCTYPE html>
     margin-bottom: 5px;
     font-size: 14px;
   }
-
-  /* ============ INPUT ============ */
   .input-area {
     padding: 18px 24px 22px;
     position: relative;
@@ -729,7 +695,6 @@ const HTML = `<!DOCTYPE html>
     max-height: 200px;
   }
   textarea::placeholder { color: var(--muted); font-weight: 500; }
-
   .send-btn {
     width: 44px; height: 44px;
     border: none;
@@ -758,7 +723,6 @@ const HTML = `<!DOCTYPE html>
     background: var(--surface-solid);
   }
   .send-btn svg { width: 19px; height: 19px; }
-
   .hint {
     max-width: 860px;
     margin: 11px auto 0;
@@ -777,7 +741,6 @@ const HTML = `<!DOCTYPE html>
     font-size: 10px;
     color: var(--text-dim);
   }
-
   @media (max-width: 768px) {
     .sidebar {
       position: fixed;
@@ -796,7 +759,6 @@ const HTML = `<!DOCTYPE html>
     .suggestions { grid-template-columns: 1fr; }
     .topbar { padding: 12px 16px; }
   }
-
   .overlay {
     display: none;
     position: fixed;
@@ -845,7 +807,7 @@ const HTML = `<!DOCTYPE html>
       </button>
       <div class="model-badge">
         <span class="dot"></span>
-        <span>Llama 3.3 70B</span>
+        <span>Llama 3.1 8B</span>
       </div>
       <div class="status-txt" id="status">Hazır</div>
     </div>
@@ -1207,8 +1169,7 @@ app.post('/chat', async (req, res) => {
       body: JSON.stringify({
         model: MODEL,
         messages: [systemPrompt, ...history],
-        temperature: 0.7,
-        max_tokens: 1024
+        temperature: 0.7
       })
     });
 
