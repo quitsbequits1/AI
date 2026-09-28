@@ -7,8 +7,9 @@ app.use(express.json());
 // =====================
 const PORT = process.env.PORT || 3000;
 const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
-const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
-const MODEL = process.env.MODEL || '@cf/openai/gpt-oss-120b';
+const CF_API_TOKEN  = process.env.CLOUDFLARE_API_TOKEN;
+// Ücretsiz planda çalışan en güçlü Llama modeli:
+const MODEL = process.env.MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
 const API_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/ai/v1/chat/completions`;
 
@@ -20,7 +21,7 @@ const HTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Nova AI</title>
+<title>BD AI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -74,7 +75,6 @@ const HTML = `<!DOCTYPE html>
     overflow: hidden;
   }
 
-  /* arka plan efekti */
   body::before {
     content: '';
     position: fixed;
@@ -122,15 +122,16 @@ const HTML = `<!DOCTYPE html>
     gap: 10px;
   }
   .logo {
-    width: 34px; height: 34px;
-    border-radius: 10px;
+    width: 38px; height: 38px;
+    border-radius: 11px;
     background: var(--grad-2);
     display: grid;
     place-items: center;
     font-weight: 700;
-    font-size: 16px;
+    font-size: 13px;
     color: #fff;
     box-shadow: 0 4px 20px var(--accent-glow);
+    letter-spacing: -.5px;
   }
   .brand {
     font-weight: 600;
@@ -350,6 +351,8 @@ const HTML = `<!DOCTYPE html>
     background: var(--surface);
     border: 1px solid var(--border);
     color: var(--accent-2);
+    font-size: 11px;
+    letter-spacing: -.3px;
   }
   [data-theme="light"] .avatar.ai-av { color: var(--accent); }
 
@@ -375,7 +378,6 @@ const HTML = `<!DOCTYPE html>
     border-top-left-radius: 4px;
   }
 
-  /* Markdown stilleri */
   .bubble p { margin-bottom: 10px; }
   .bubble p:last-child { margin-bottom: 0; }
   .bubble h1, .bubble h2, .bubble h3 {
@@ -449,7 +451,6 @@ const HTML = `<!DOCTYPE html>
   }
   .msg-actions button:hover { background: var(--surface); color: var(--text); }
 
-  /* typing */
   .typing-dots {
     display: flex;
     gap: 5px;
@@ -477,14 +478,17 @@ const HTML = `<!DOCTYPE html>
     animation: slideIn .5s;
   }
   .welcome-logo {
-    width: 68px; height: 68px;
+    width: 72px; height: 72px;
     margin: 0 auto 22px;
     border-radius: 20px;
     background: var(--grad-2);
     display: grid;
     place-items: center;
-    font-size: 32px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
     box-shadow: 0 12px 40px var(--accent-glow);
+    letter-spacing: -1px;
   }
   .welcome h1 {
     font-size: 30px;
@@ -585,7 +589,6 @@ const HTML = `<!DOCTYPE html>
     text-align: center;
   }
 
-  /* mobile */
   @media (max-width: 768px) {
     .sidebar {
       position: fixed;
@@ -615,11 +618,10 @@ const HTML = `<!DOCTYPE html>
 <body data-theme="dark">
 
 <div class="app">
-  <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <div class="logo">N</div>
-      <div class="brand">Nova AI<small>Modern sohbet</small></div>
+      <div class="logo">BD</div>
+      <div class="brand">BD AI<small>Akıllı sohbet</small></div>
     </div>
     <button class="new-chat" onclick="newChat()">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -635,7 +637,6 @@ const HTML = `<!DOCTYPE html>
 
   <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
 
-  <!-- MAIN -->
   <main class="main">
     <div class="topbar">
       <button class="menu-btn" onclick="toggleSidebar()" title="Menü">
@@ -643,7 +644,7 @@ const HTML = `<!DOCTYPE html>
       </button>
       <div class="model-badge">
         <span class="dot"></span>
-        <span id="modelName">GPT-OSS 120B</span>
+        <span>Llama 3.3 70B</span>
       </div>
       <div class="status-txt" id="status">Hazır</div>
     </div>
@@ -652,7 +653,7 @@ const HTML = `<!DOCTYPE html>
 
     <div class="input-area">
       <div class="input-wrap">
-        <textarea id="msg" rows="1" placeholder="Nova'ya bir şey sor..."></textarea>
+        <textarea id="msg" rows="1" placeholder="BD AI'ya bir şey sor..."></textarea>
         <button class="send-btn" id="send" title="Gönder">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
         </button>
@@ -672,14 +673,13 @@ const HTML = `<!DOCTYPE html>
   const statusEl  = document.getElementById('status');
   const themeBtn  = document.getElementById('themeBtn');
 
-  const STORAGE_KEY = 'nova_chats';
-  const THEME_KEY   = 'nova_theme';
+  const STORAGE_KEY = 'bdai_chats';
+  const THEME_KEY   = 'bdai_theme';
 
-  let chats = [];         // [{id, title, messages: [{role, content}], createdAt}]
+  let chats = [];
   let currentId = null;
   let isStreaming = false;
 
-  // ============ STORAGE ============
   function loadChats() {
     try { chats = JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
     catch { chats = []; }
@@ -742,7 +742,6 @@ const HTML = `<!DOCTYPE html>
     });
   }
 
-  // ============ RENDER ============
   function render() {
     const c = currentChat();
     chatEl.innerHTML = '';
@@ -754,8 +753,8 @@ const HTML = `<!DOCTYPE html>
   function renderWelcome() {
     const w = document.createElement('div');
     w.className = 'welcome';
-    w.innerHTML = '<div class="welcome-logo">✨</div>' +
-      '<h1>Merhaba, ben Nova</h1>' +
+    w.innerHTML = '<div class="welcome-logo">BD</div>' +
+      '<h1>Merhaba, ben BD AI</h1>' +
       '<p>Sana nasıl yardımcı olabilirim?</p>' +
       '<div class="suggestions">' +
         sugg('💡 Bir fikir ver', 'Bana yeni bir iş fikri öner ve neden tutacağını açıkla.') +
@@ -788,8 +787,8 @@ const HTML = `<!DOCTYPE html>
 
     const av = document.createElement('div');
     av.className = 'avatar ' + (role === 'user' ? 'user-av' : 'ai-av');
-    av.textContent = role === 'user' ? 'Sen' : '✨';
-    av.style.fontSize = role === 'user' ? '11px' : '15px';
+    av.textContent = role === 'user' ? 'Sen' : 'BD';
+    av.style.fontSize = role === 'user' ? '11px' : '12px';
 
     const body = document.createElement('div');
     body.style.minWidth = '0';
@@ -804,7 +803,6 @@ const HTML = `<!DOCTYPE html>
     }
     body.appendChild(bubble);
 
-    // action butonları (sadece AI)
     if (role === 'assistant') {
       const actions = document.createElement('div');
       actions.className = 'msg-actions';
@@ -844,7 +842,7 @@ const HTML = `<!DOCTYPE html>
     const wrap = document.createElement('div');
     wrap.className = 'msg-wrap ai';
     wrap.id = 'typingMsg';
-    wrap.innerHTML = '<div class="avatar ai-av">✨</div>' +
+    wrap.innerHTML = '<div class="avatar ai-av">BD</div>' +
       '<div><div class="bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div></div>';
     chatEl.appendChild(wrap);
     scrollBottom();
@@ -854,7 +852,6 @@ const HTML = `<!DOCTYPE html>
     requestAnimationFrame(() => { chatEl.scrollTop = chatEl.scrollHeight; });
   }
 
-  // ============ SEND ============
   async function send() {
     const text = msgEl.value.trim();
     if (!text || isStreaming) return;
@@ -862,13 +859,11 @@ const HTML = `<!DOCTYPE html>
     const c = currentChat();
     if (!c) return;
 
-    // ilk mesajsa başlık ata
     if (c.messages.length === 0) {
       c.title = text.slice(0, 40) + (text.length > 40 ? '...' : '');
       renderSidebar();
+      chatEl.innerHTML = '';
     }
-
-    if (c.messages.length === 0) chatEl.innerHTML = '';
 
     c.messages.push({ role: 'user', content: text });
     appendMessage('user', text, false);
@@ -915,7 +910,6 @@ const HTML = `<!DOCTYPE html>
   async function regenerate() {
     const c = currentChat();
     if (!c || c.messages.length < 2) return;
-    // son AI mesajını sil
     if (c.messages[c.messages.length - 1].role === 'assistant') {
       c.messages.pop();
     }
@@ -949,7 +943,6 @@ const HTML = `<!DOCTYPE html>
     }
   }
 
-  // ============ UI HELPERS ============
   function autoResize() {
     msgEl.style.height = 'auto';
     msgEl.style.height = Math.min(msgEl.scrollHeight, 200) + 'px';
@@ -966,7 +959,6 @@ const HTML = `<!DOCTYPE html>
     localStorage.setItem(THEME_KEY, t);
   }
 
-  // ============ EVENTS ============
   sendBtn.onclick = send;
   msgEl.addEventListener('input', autoResize);
   msgEl.addEventListener('keydown', e => {
@@ -977,7 +969,6 @@ const HTML = `<!DOCTYPE html>
     applyTheme(cur === 'dark' ? 'light' : 'dark');
   };
 
-  // ============ INIT ============
   applyTheme(localStorage.getItem(THEME_KEY) || 'dark');
   loadChats();
   msgEl.focus();
@@ -996,11 +987,11 @@ app.post('/chat', async (req, res) => {
   try {
     const { history } = req.body;
     if (!Array.isArray(history)) return res.status(400).json({ error: 'Geçersiz istek' });
-    if (!CF_API_TOKEN || !CF_ACCOUNT_ID) return res.status(500).json({ error: 'Sunucu yapılandırması eksik' });
+    if (!CF_API_TOKEN || !CF_ACCOUNT_ID) return res.status(500).json({ error: 'Sunucu yapılandırması eksik (CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN)' });
 
     const systemPrompt = {
       role: 'system',
-      content: 'Sen Nova adlı yardımcı bir Türkçe AI asistanısın. Net, doğru ve kısa cevap ver. Markdown kullanabilirsin.'
+      content: 'Sen BD AI adlı yardımcı bir Türkçe AI asistanısın. Net, doğru ve kısa cevap ver. Markdown kullanabilirsin.'
     };
 
     const aiRes = await fetch(API_URL, {
@@ -1012,16 +1003,29 @@ app.post('/chat', async (req, res) => {
       body: JSON.stringify({
         model: MODEL,
         messages: [systemPrompt, ...history],
-        temperature: 0.7
+        temperature: 0.7,
+        max_tokens: 1024
       })
     });
 
-    const data = await aiRes.json();
+    const raw = await aiRes.text();
+    let data;
+    try { data = JSON.parse(raw); } catch { data = { raw }; }
+
     if (!aiRes.ok) {
-      const errMsg = data.errors?.[0]?.message || data.error?.message || 'AI servisi hata verdi';
+      const errMsg = data?.errors?.[0]?.message
+                  || data?.error?.message
+                  || data?.error
+                  || ('HTTP ' + aiRes.status);
+      console.error('CF hata:', aiRes.status, JSON.stringify(data));
       return res.status(aiRes.status).json({ error: errMsg });
     }
-    const reply = data.choices?.[0]?.message?.content || data.result?.response || '(boş cevap)';
+
+    const reply = data?.choices?.[0]?.message?.content
+               || data?.result?.response
+               || data?.response
+               || '(boş cevap)';
+
     res.json({ reply });
   } catch (err) {
     console.error(err);
@@ -1030,6 +1034,6 @@ app.post('/chat', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log('Sunucu ' + PORT + ' portunda çalışıyor');
+  console.log('BD AI sunucusu ' + PORT + ' portunda çalışıyor');
   console.log('Model: ' + MODEL);
 });
